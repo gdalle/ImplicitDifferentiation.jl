@@ -25,6 +25,8 @@ struct SolverFailureException <: Exception
     msg::String
 end
 
+ImplicitFunction(forward, conditions) = ImplicitFunction(forward, conditions, linsolve)
+
 """
     implicit(x)
 
@@ -49,21 +51,14 @@ function ChainRulesCore.frule(
     conditions_x(x̃) = conditions(x̃, y)
     conditions_y(ỹ) = -conditions(x, ỹ)
 
-    pushforward_A(dỹ) = frule_via_ad(rc, (NoTangent(), dỹ), conditions_y, y)[2]
-    pushforward_B(dx̃) = frule_via_ad(rc, (NoTangent(), dx̃), conditions_x, x)[2]
+    A(dỹ) = frule_via_ad(rc, (NoTangent(), dỹ), conditions_y, y)[2]
+    B(dx̃) = frule_via_ad(rc, (NoTangent(), dx̃), conditions_x, x)[2]
 
-    mul_A!(res::Vector, u::Vector) = res .= vec(pushforward_A(reshape(u, size(y))))
-    mul_B!(res::Vector, v::Vector) = res .= vec(pushforward_B(reshape(v, size(x))))
-
-    n, m = length(x), length(y)
-    A = LinearOperator(R, m, m, false, false, mul_A!)
-    B = LinearOperator(R, m, n, false, false, mul_B!)
-
-    dx_vec = convert(Vector{R}, vec(unthunk(dx)))
-    b = B * dx_vec
-    dy_vec, stats = linear_solver(A, b)
-    stats.solved || throw(SolverFailureException("Linear solver failed to converge"))
-    dy = reshape(dy_vec, size(y))
+    b = B(unthunk(dx))
+    dy, info = linear_solver(A, b)
+    if iszero(info.converged)
+        throw(SolverFailureException("Linear solver failed to converge"))
+    end
 
     return y, dy
 end
@@ -85,22 +80,15 @@ function ChainRulesCore.rrule(
     conditions_x(x̃) = conditions(x̃, y)
     conditions_y(ỹ) = -conditions(x, ỹ)
 
-    pullback_Aᵀ = last ∘ rrule_via_ad(rc, conditions_y, y)[2]
-    pullback_Bᵀ = last ∘ rrule_via_ad(rc, conditions_x, x)[2]
-
-    mul_Aᵀ!(res::Vector, u::Vector) = res .= vec(pullback_Aᵀ(reshape(u, size(y))))
-    mul_Bᵀ!(res::Vector, v::Vector) = res .= vec(pullback_Bᵀ(reshape(v, size(y))))
-
-    n, m = length(x), length(y)
-    Aᵀ = LinearOperator(R, m, m, false, false, mul_Aᵀ!)
-    Bᵀ = LinearOperator(R, n, m, false, false, mul_Bᵀ!)
+    Aᵀ = last ∘ rrule_via_ad(rc, conditions_y, y)[2]
+    Bᵀ = last ∘ rrule_via_ad(rc, conditions_x, x)[2]
 
     function implicit_pullback(dy)
-        dy_vec = convert(Vector{R}, vec(unthunk(dy)))
-        u, stats = linear_solver(Aᵀ, dy_vec)
-        stats.solved || throw(SolverFailureException("Linear solver failed to converge"))
-        dx_vec = Bᵀ * u
-        dx = reshape(dx_vec, size(x))
+        u, info = linear_solver(Aᵀ, unthunk(dy))
+        if iszero(info.converged)
+            throw(SolverFailureException("Linear solver failed to converge"))
+        end
+        dx = Bᵀ(u)
         return (NoTangent(), dx)
     end
 

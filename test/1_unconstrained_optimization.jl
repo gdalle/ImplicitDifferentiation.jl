@@ -13,7 +13,6 @@ F(x, \hat{y}(x)) = 0 \quad \text{with} \quad F(x,y) = \nabla_2 f(x, y) = 0
 =#
 
 using ImplicitDifferentiation
-using Krylov: gmres
 using Optim
 using Random
 using Zygote
@@ -49,7 +48,7 @@ zero_gradient(x, y) = 2(y - x);
 
 # We now have all the ingredients to construct our implicit function.
 
-implicit = ImplicitFunction(dumb_identity, zero_gradient, gmres);
+implicit = ImplicitFunction(dumb_identity, zero_gradient);
 
 # ## Testing
 
@@ -76,6 +75,6 @@ end
 # The following tests are not included in the docs.  #src
 
 @testset verbose = true "ChainRulesTestUtils" begin  #src
-    test_frule(implicit, x; check_inferred=true)  #src
-    test_rrule(implicit, x; check_inferred=true)  #src
+    test_frule(implicit, x; check_inferred=false)  #src
+    test_rrule(implicit, x; check_inferred=false)  #src
 end  #src

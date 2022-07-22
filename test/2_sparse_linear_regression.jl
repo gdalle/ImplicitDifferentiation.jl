@@ -16,7 +16,6 @@ using ComponentArrays
 using Convex
 using FiniteDifferences
 using ImplicitDifferentiation
-using Krylov: gmres
 using MathOptInterface
 using MathOptSetDistances
 using Random
@@ -80,7 +79,7 @@ end
 
 # This is the last ingredient we needed to build a differentiable sparse linear regression.
 
-implicit = ImplicitFunction(lasso, proj_grad_fixed_point, gmres);
+implicit = ImplicitFunction(lasso, proj_grad_fixed_point);
 
 # ## Testing
 
